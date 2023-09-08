@@ -1,0 +1,45 @@
+version: "3.3"
+
+services:
+  traefik:
+    image: traefik:${TRAEFIK_VERSION_TAG}
+    restart: always
+    container_name: traefik-selfhosted
+    env_file:
+      - ./.env
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      - --api.dashboard=true
+      - --api.debug=true
+      - --log.level=DEBUG
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=traefik-proxy-network
+      - --entrypoints.web.address=:80
+      - --entrypoints.web-secured.address=:443
+      - --certificatesresolvers.mytlschallenge.acme.tlschallenge=true
+      - --certificatesresolvers.mytlschallenge.acme.email=${TRAEFIK_ACME_EMAIL}
+      - --certificatesresolvers.mytlschallenge.acme.storage=/letsencrypt/acme.json
+      - --accesslog=true
+      - --accesslog.filePath=/logs/access.log
+      - --entrypoints.web.http.redirections.entryPoint.to=web-secured
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.web.http.redirections.entryPoint.permanent=true
+    volumes:
+      - ./letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - proxy
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.dashboard.rule: "Host(`${TRAEFIK_DASHBOARD_URL_WITHOUT_PROTOCOL}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      traefik.http.routers.dashboard.service: "api@internal"
+      traefik.http.routers.dashboard.middlewares: "auth"  
+      traefik.http.middlewares.auth.basicauth.users: "${TRAEFIK_BASIC_AUTH_USER}"
+      traefik.http.routers.dashboard.tls.certresolver: "mytlschallenge"
+      traefik.http.routers.dashboard.entrypoints: "web-secured"
+networks:  
+  proxy:
+    name: traefik-proxy-network

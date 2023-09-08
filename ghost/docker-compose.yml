@@ -1,0 +1,63 @@
+version: "3.3"
+
+services:
+  ghost:
+    image: ghost:${GHOST_VERSION_TAG}
+    restart: always
+    container_name: ghost-selfhosted
+    depends_on:
+      - database
+    env_file:
+      - ./.env
+    environment:
+      url: "https://${GHOST_SITE_URL_WITHOUT_PROTOCOL}"
+      database__client: "mysql"
+      database__connection__host: ${MYSQL_CONTAINER_HOSTNAME}
+      database__connection__port: 3306
+      database__connection__user: ${MYSQL_USER}
+      database__connection__password: ${MYSQL_PASSWORD}
+      database__connection__database: ${MYSQL_DATABASE}
+      mail__from: ${GHOST_SMTP_FROM_EMAIL}
+      mail__transport: "SMTP"
+      mail__options__host: ${GHOST_SMTP_HOST}
+      mail__options__port: 465
+      mail__options__service: ${GHOST_SMTP_SERVICE_NAME}
+      mail__options__auth__user: ${GHOST_SMTP_USER}
+      mail__options__auth__pass: ${GHOST_SMTP_PASSWORD}
+    volumes:
+      - ./ghost/content:/var/lib/ghost/content
+      - ./ghost/config.production.json:/var/lib/ghost/config.production.json
+    hostname: ghost-selfhosted-host
+    networks:
+      - proxy
+      - backend
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.traefik-secured.rule: "Host(`${GHOST_SITE_URL_WITHOUT_PROTOCOL}`)"
+      traefik.http.routers.traefik-secured.entrypoints: "web-secured"
+      traefik.http.routers.traefik-secured.tls: "true"
+      traefik.http.routers.traefik-secured.tls.certresolver: "mytlschallenge"
+      traefik.docker.network: "traefik-proxy-network"
+
+  database:
+    image: mysql:${MYSQL_VERSION_TAG}
+    restart: always
+    container_name: mysql-selfhosted
+    env_file:
+      - ./.env
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    hostname: ${MYSQL_CONTAINER_HOSTNAME}
+    volumes:
+      - ./mysql:/var/lib/mysql
+    networks:
+      - backend
+
+networks:  
+  proxy:  
+    name: traefik-proxy-network
+    external: true
+  backend:
